@@ -13,7 +13,6 @@
 
 ;; tag::a-tale/def-system[]
 
-; or
 (def system
   (crux/start-standalone-system
     {:kv-backend "crux.kv.memdb.MemKv" :db-dir "data/db-dir-1"}))
@@ -49,8 +48,7 @@
 ;; end::a-tale/def-character[]
 
 
-;; tag::a-tale/rest[]
-; Load the remaining part of the set
+;; tag::a-tale/rest-of-set[]
 (crux/submit-tx
   system
   [; rest of characters
@@ -129,22 +127,35 @@
      :place/location :ids.places/carribean}
     #inst "1000-01-01"]
    ])
-
+;; end::a-tale/rest-of-set[]
 
 
 ;; Looking Around : Basic Queries
 
 ; Get a database _value_ and read from it consistently
+
+;; tag::a-tale/simple-queries[]
 (def db (crux/db system))
 
 ; Query entities
 (crux/entity db :ids.people/Charles)
+; yields
+{:crux.db/id :ids.people/Charles,
+ :person/str 40,
+ :person/dex 40,
+ :person/location :ids.places/rarities-shop,
+ :person/hp 40,
+ :person/int 40,
+ :person/name "Charles",
+ :person/gold 10000,
+ :person/born #inst "1700-05-18T00:00:00.000-00:00"}
 
 ; Datalog syntax : query ids
 (crux/q db
         '[:find ?e
           :where
           [?e :person/name "Charles"]])
+#{[:ids.people/Charles]}
 
 ; Datalog syntax : query more fields
 (crux/q db
@@ -153,6 +164,7 @@
           [?e :person/name "Charles"]
           [?e :person/name ?name]
           [?e :person/int  ?int]])
+#{[:ids.people/Charles "Charles" 40]}
 
 ; See all artefact names
 (crux/q db
@@ -164,6 +176,8 @@
   ["A used sword"] ["A Rather Cozy Mug"]
   ["A Tell DPS Laptop (what?)"]
   ["Flintlock pistol"]}
+;; end::a-tale/simple-queries[]
+
 
 
 ;; Balancing the world
@@ -171,19 +185,26 @@
 ; Ok yes magic beans once _were_ in the realm, and we want to remember that,
 ; but following advice from our publisher we've decided to remove them from
 ; the story for now. Charles won't know that they ever existed!
+
+;; tag::a-tale/delete-query[]
 (crux/submit-tx
   system
   [[:crux.tx/delete :ids.artefacts/forbidden-beans
     #inst "1690-05-18"]])
+;; end::a-tale/delete-query[]
+
 
 ; Sometimes people enter data which just doesn't belong there or that they no
 ; longer have a legal right to store.
 ; Lets completely wipe all traces of that laptop from the timelines.
+;; tag::a-tale/evict-query[]
 (crux/submit-tx
   system
   [[:crux.tx/evict :ids.artefacts/laptop]])
+;; end::a-tale/evict-query[]
 
-; See all artefact names
+; Let's see what we got now
+;; tag::a-tale/eviction-result[]
 (crux/q (crux/db system)
         '[:find ?name
           :where
@@ -201,24 +222,22 @@
 
 ; yields
 #{["Magic beans"]}
+;; end::a-tale/eviction-result[]
 
 
 
 ;; Some character development
 
-; Note that transactions in Crux will rewrite the whole entity.
-; This is because the core of Crux is intentionally slim, and
-; features like partial updates will appear in utils projects!
+; Let's see how Crux handles references. Give our characters some artefacts
 
-; Give 'em some artefacts
-
+;; tag::a-tale/write-references[]
 (defn first-ownership-tx []
   [(let [charles (crux/entity (crux/db system #inst "1725-05-17") :ids.people/Charles)]
      ; Charles was 25 when he found the Cozy Mug
       [:crux.tx/put :ids.people/Charles
        (update charles
               ; Crux is schemaless, so we can use :person/has however we like
-              :person/has 
+              :person/has
               (comp set conj)
               ; ...such as storing a set of references to other entity ids
               :ids.artefacts/cozy-mug
@@ -236,7 +255,7 @@
 
 (def first-ownership-tx-response
   (crux/submit-tx system (first-ownership-tx)))
-
+;; end::a-tale/write-references[]
 
 
 ; Who has what : basic joins
